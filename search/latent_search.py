@@ -13,6 +13,7 @@ from logger.stdout_logger import StdoutLogger
 from tasks.task import Task
 from config import Config
 from vae.models.sketch_vae import SketchVAE
+import numpy as np
 
 
 def execute_program(program_str: str, task_envs: list[Task],
@@ -91,35 +92,167 @@ class LatentSearch:
             tuple[list[str], int, torch.Tensor]: List of programs as strings, list of mean rewards
             as tensor and number of evaluations as int.
         """
-        programs_tokens = self.model.decode_vector(population)
-        programs_str = [self.dsl.parse_int_to_str(prog_tokens) for prog_tokens in programs_tokens]
+        # programs_tokens = self.model.decode_vector(population)
+        # programs_str = [self.dsl.parse_int_to_str(prog_tokens) for prog_tokens in programs_tokens]
         
-        if Config.multiprocessing_active:
-            with Pool() as pool:
-                fn = partial(execute_program, task_envs=self.task_envs, dsl=self.dsl)
-                results = pool.map(fn, programs_str)
-        else:
-            results = [execute_program(p, self.task_envs, self.dsl) for p in programs_str]
+        # if Config.multiprocessing_active:
+        #     with Pool() as pool:
+        #         fn = partial(execute_program, task_envs=self.task_envs, dsl=self.dsl)
+        #         results = pool.map(fn, programs_str)
+        # else:
+        #     results = [execute_program(p, self.task_envs, self.dsl) for p in programs_str]
         
-        rewards = []
-        for p, num_eval, r in results:
-            program_str = self.dsl.parse_node_to_str(p)
-            rewards.append(r)
-            self.num_evaluations += num_eval
-            if r > self.best_reward:
-                self.best_reward = r
-                self.best_program = program_str
-                StdoutLogger.log('Latent Search',f'New best reward: {self.best_reward}')
-                StdoutLogger.log('Latent Search',f'New best program: {self.best_program}')
-                StdoutLogger.log('Latent Search',f'Number of evaluations: {self.num_evaluations}')
+        # rewards = []
+        # for p, num_eval, r in results:
+        #     program_str = self.dsl.parse_node_to_str(p)
+        #     rewards.append(r)
+        #     self.num_evaluations += num_eval
+        #     if r > self.best_reward:
+        #         self.best_reward = r
+        #         self.best_program = program_str
+        #         StdoutLogger.log('Latent Search',f'New best reward: {self.best_reward}')
+        #         StdoutLogger.log('Latent Search',f'New best program: {self.best_program}')
+        #         StdoutLogger.log('Latent Search',f'Number of evaluations: {self.num_evaluations}')
+        #         with open(self.output_file, mode='a') as f:
+        #             t = time.time() - self.start_time
+        #             f.write(f'{t},{self.num_evaluations},{self.best_reward},{self.best_program}\n')
+        #     if self.best_reward >= 1.0:
+        #         self.converged = True
+        #         break     
+
+        # rewards = np.zeros((len(population), len(self.task_envs)))
+        # rewards = []
+        # self.num_evaluations = 0
+
+        # for z in population:
+
+        #     total_reward = 0.0
+
+        #     for env in self.task_envs:
+        #         env_state = env.generate_state()
+        #         env.reset_state()
+
+        #         # Convert environment state to tensor format expected by policy_executor
+        #         state_tensor = torch.tensor(env_state.get_state(), dtype=torch.float32, device=self.model.device)
+        #         state_tensor = state_tensor.permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
+        #         s_h = state_tensor.unsqueeze(0).repeat(1, 1, self.model.max_demo_length, 1, 1, 1)
+
+        #         a_h = torch.full((1, 1, self.model.max_demo_length),
+        #                         fill_value=self.model.num_agent_actions - 1,
+        #                         dtype=torch.long, device=self.model.device)
+        #         a_h_masks = torch.zeros_like(a_h)
+
+        #         with torch.no_grad():
+        #             pred_actions, _, _ = self.model.policy_executor(
+        #                 z.unsqueeze(0),
+        #                 s_h=s_h,
+        #                 a_h=a_h,
+        #                 a_h_mask=a_h_masks,
+        #                 a_h_teacher_enforcing=False
+        #             )
+
+        #         # Evaluate action sequence in the environment
+        #         actions = pred_actions[0].cpu().numpy()
+        #         #print(actions)
+        #         # reward = 0.0
+        #         for action in actions:
+        #             if action >= 5:
+        #                 continue
+        #             env.state.run_action(action)
+        #             terminated, r = env.get_reward(env.get_state())
+        #             total_reward += r
+        #             if terminated or env.state.is_crashed():
+        #                 break
+        #         #print('total',total_reward)
+            
+        #     mean_reward = total_reward / len(self.task_envs)
+        #     #print('mean', mean_reward)
+        #     rewards.append(mean_reward)
+        #     self.num_evaluations += 1
+
+        #     if mean_reward > self.best_reward:
+        #         self.best_reward = mean_reward
+        #         self.best_program = z
+        #         StdoutLogger.log("Latent Search", f"New best reward: {mean_reward}")
+            
+        #     if self.best_reward >= 1.0:
+        #         self.converged = True
+        #         break
+
+        population_size = population.shape[0]
+        rewards = torch.zeros(population_size, device=self.device)
+        self.num_evaluations = 0
+
+        # Batch process all environments for each z
+        for env_idx, env in enumerate(self.task_envs):
+            env_state = env.generate_state()
+            env.reset_state()
+
+            # Convert environment state to tensor format expected by policy_executor
+            state_tensor = torch.tensor(env_state.get_state(), dtype=torch.float32, device=self.model.device)
+            state_tensor = state_tensor.permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
+            # Repeat for population_size and add demos_per_program dimension
+            s_h = state_tensor.repeat(population_size, 1, 1, 1, 1)  # [population_size, 1, C, H, W]
+            s_h = s_h.unsqueeze(2).repeat(1, 1, self.model.max_demo_length, 1, 1, 1)  # [population_size, 1, max_demo_length, C, H, W]
+
+            # Dummy action history (NOP-filled) and mask
+            a_h = torch.full(
+                (population_size, 1, self.model.max_demo_length),
+                fill_value=self.model.num_agent_actions - 1,
+                dtype=torch.long,
+                device=self.model.device
+            )
+            a_h_masks = torch.zeros_like(a_h, dtype=torch.bool, device=self.model.device)
+
+            with torch.no_grad():
+                pred_actions, _, _ = self.model.policy_executor(
+                    population,  # [population_size, hidden_size]
+                    s_h=s_h,
+                    a_h=a_h,
+                    a_h_mask=a_h_masks,
+                    a_h_teacher_enforcing=False
+                )
+
+            # Evaluate action sequences in the environment
+            actions = pred_actions.cpu().numpy()  # [population_size, max_demo_length]
+            for i in range(population_size):
+                env.reset_state()  # Reset for each individual
+                total_reward = 0.0
+                terminated = False
+
+                for action in actions[i]:
+                    if action >= self.model.num_agent_actions - 1:  # NOP or invalid
+                        break
+                    env.state.run_action(action)
+                    terminated, r = env.get_reward(env.get_state())
+                    total_reward += r
+                    if terminated or env.state.is_crashed():
+                        break
+
+                rewards[i] += total_reward
+
+        # Compute mean reward across environments
+        rewards /= len(self.task_envs)
+        self.num_evaluations += population_size
+
+        # Update best reward and "program" (latent vector)
+        for i, reward in enumerate(rewards):
+            if reward > self.best_reward:
+                self.best_reward = reward
+                self.best_program = population[i].cpu().tolist()  # Store z as list for logging
+                StdoutLogger.log("Latent Search", f"New best reward: {self.best_reward}")
+                StdoutLogger.log("Latent Search", f"New best latent: {self.best_program}")
+                StdoutLogger.log("Latent Search", f"Number of evaluations: {self.num_evaluations}")
                 with open(self.output_file, mode='a') as f:
                     t = time.time() - self.start_time
-                    f.write(f'{t},{self.num_evaluations},{self.best_reward},{self.best_program}\n')
+                    f.write(f"{t},{self.num_evaluations},{self.best_reward},{self.best_program}\n")
             if self.best_reward >= 1.0:
                 self.converged = True
-                break                
-        
-        return torch.tensor(rewards, device=self.device)
+                break
+
+
+        # return torch.tensor(rewards, device=self.device)
+        return rewards
 
     
     def search(self) -> tuple[str, bool, int]:
@@ -142,6 +275,7 @@ class LatentSearch:
             f.write('time,num_evaluations,best_reward,best_program\n')
 
         for iteration in range(1, self.number_iterations + 1):
+            StdoutLogger.log('Latent Search',f'Executing population')
             rewards = self.execute_population(population)
             
             if self.converged:

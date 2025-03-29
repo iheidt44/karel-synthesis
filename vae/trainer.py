@@ -59,7 +59,7 @@ class Trainer:
                             not self.disable_prog_teacher_enforcing,
                             not self.disable_a_h_teacher_enforcing)
         pred_progs, pred_progs_logits, pred_progs_masks,\
-            pred_a_h, pred_a_h_logits, pred_a_h_masks = output
+              pred_a_h, pred_a_h_logits, pred_a_h_masks = output
         
         if type(a_h) == torch.Tensor:
             # Combine first 2 dimensions of a_h (batch_size and demos_per_program)
@@ -74,20 +74,20 @@ class Trainer:
             a_h_flat = a_h.view(-1, 1)
             a_h_masks_flat = a_h_masks.view(-1, 1)
         
-        if type(progs) == torch.Tensor:
-            # Skip first token in ground truth sequences
-            progs = progs[:, 1:].contiguous()
-            progs_masks = progs_masks[:, 1:].contiguous()
+        # if type(progs) == torch.Tensor:
+        #     # Skip first token in ground truth sequences
+        #     progs = progs[:, 1:].contiguous()
+        #     progs_masks = progs_masks[:, 1:].contiguous()
 
-            # Flatten everything for loss calculation
-            progs_flat = progs.view(-1, 1)
-            progs_masks_flat = progs_masks.view(-1, 1)
+        #     # Flatten everything for loss calculation
+        #     progs_flat = progs.view(-1, 1)
+        #     progs_masks_flat = progs_masks.view(-1, 1)
         
-        if pred_progs is not None:
-            pred_progs_logits = pred_progs_logits.view(-1, pred_progs_logits.shape[-1])
-            pred_progs_masks_flat = pred_progs_masks.view(-1, 1)
-            # We combine masks here to penalize predictions that are larger than ground truth
-            progs_masks_flat_combined = torch.max(progs_masks_flat, pred_progs_masks_flat).squeeze()
+        # if pred_progs is not None:
+        #     pred_progs_logits = pred_progs_logits.view(-1, pred_progs_logits.shape[-1])
+        #     pred_progs_masks_flat = pred_progs_masks.view(-1, 1)
+        #     # We combine masks here to penalize predictions that are larger than ground truth
+        #     progs_masks_flat_combined = torch.max(progs_masks_flat, pred_progs_masks_flat).squeeze()
 
         if pred_a_h is not None:
             pred_a_h_logits = pred_a_h_logits.view(-1, pred_a_h_logits.shape[-1])
@@ -102,9 +102,9 @@ class Trainer:
         zero_tensor = torch.tensor([0.0], device=self.device, requires_grad=False)
         progs_loss, a_h_loss = zero_tensor, zero_tensor
         
-        if pred_progs is not None:
-            progs_loss = self.loss_fn(pred_progs_logits[progs_masks_flat_combined],
-                                    progs_flat[progs_masks_flat_combined].view(-1))
+        # if self.prog_loss_coef > 0.0 and pred_progs is not None:
+        #     progs_loss = self.loss_fn(pred_progs_logits[progs_masks_flat_combined],
+        #                             progs_flat[progs_masks_flat_combined].view(-1))
 
         if pred_a_h is not None:
             a_h_loss = self.loss_fn(pred_a_h_logits[a_h_masks_flat_combined],
@@ -112,19 +112,20 @@ class Trainer:
         
         latent_loss = self.model.get_latent_loss()
         
-        total_loss = self.prog_loss_coef * progs_loss + self.a_h_loss_coef * a_h_loss \
-            + self.latent_loss_coef * latent_loss
-            
+        # total_loss = self.prog_loss_coef * progs_loss + self.a_h_loss_coef * a_h_loss \
+        #     + self.latent_loss_coef * latent_loss
+        total_loss = self.a_h_loss_coef * a_h_loss + self.latent_loss_coef * latent_loss
+
         if training:
             total_loss.backward()
             self.optimizer.step()
-            
+        
         with torch.no_grad():
-            progs_s_accuracy, progs_t_accuracy = zero_tensor, zero_tensor
-            if pred_progs is not None:
-                progs_masks_combined = torch.max(progs_masks, pred_progs_masks)
-                progs_t_accuracy = (pred_progs[progs_masks_combined] == progs[progs_masks_combined]).float().mean()
-                progs_s_accuracy = (progs == pred_progs).min(dim=1).values.float().mean()
+            # progs_s_accuracy, progs_t_accuracy = zero_tensor, zero_tensor     
+            # if self.prog_loss_coef > 0 and pred_progs is not None:
+            #     progs_masks_combined = torch.max(progs_masks, pred_progs_masks)
+            #     progs_t_accuracy = (pred_progs[progs_masks_combined] == progs[progs_masks_combined]).float().mean()
+            #     progs_s_accuracy = (progs == pred_progs).min(dim=1).values.float().mean()
             
             a_h_s_accuracy, a_h_t_accuracy = zero_tensor, zero_tensor
             if pred_a_h is not None:
@@ -132,25 +133,41 @@ class Trainer:
                 a_h_t_accuracy = (pred_a_h[a_h_masks_combined] == a_h[a_h_masks_combined]).float().mean()
                 a_h_s_accuracy = (a_h == pred_a_h).min(dim=1).values.float().mean()
             
+        # return [
+        #     total_loss.detach().cpu().numpy().item(),
+        #     progs_loss.detach().cpu().numpy().item(),
+        #     a_h_loss.detach().cpu().numpy().item(),
+        #     latent_loss.detach().cpu().numpy().item(),
+        #     progs_t_accuracy.detach().cpu().numpy().item(),
+        #     progs_s_accuracy.detach().cpu().numpy().item(),
+        #     a_h_t_accuracy.detach().cpu().numpy().item(),
+        #     a_h_s_accuracy.detach().cpu().numpy().item()
+        # ]
         return [
             total_loss.detach().cpu().numpy().item(),
-            progs_loss.detach().cpu().numpy().item(),
+            progs_loss.detach().cpu().numpy().item(), # 0.0
             a_h_loss.detach().cpu().numpy().item(),
             latent_loss.detach().cpu().numpy().item(),
-            progs_t_accuracy.detach().cpu().numpy().item(),
-            progs_s_accuracy.detach().cpu().numpy().item(),
+            0.0,
+            0.0,
             a_h_t_accuracy.detach().cpu().numpy().item(),
             a_h_s_accuracy.detach().cpu().numpy().item()
         ]
+    
+
 
     def _run_epoch(self, dataloader: DataLoader, epoch: int, training = True) -> EpochReturn:
         batch_info_list = np.zeros((len(dataloader), 8))
         
         for batch_idx, batch in enumerate(dataloader):
+            StdoutLogger.log('Epoch', f'Running batch {batch_idx}.')
             batch_info = self._run_batch(batch, training)
             batch_info_list[batch_idx] = batch_info
+            StdoutLogger.log('Epoch', f'batch info = {batch_info}.')
         
+        StdoutLogger.log('batch info', f'batch info = {batch_info_list}.')
         epoch_info_list = np.mean(batch_info_list, axis=0)
+        StdoutLogger.log('epoch info', f'epoch info = {epoch_info_list}.')
         
         return EpochReturn(*epoch_info_list.tolist())
     
