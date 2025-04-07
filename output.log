@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/Users/isaiahheidt/Desktop/CMPUT_659_PROJECT/karel-synthesis/main_latent_search.py", line 30, in <module>
+    model.load_state_dict(params, strict=False)
+  File "/Users/isaiahheidt/Desktop/CMPUT_659_PROJECT/venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1671, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for LeapsVAE:
+	size mismatch for state_encoder.5.weight: copying a param with shape torch.Size([256, 512]) from checkpoint, the shape in current model is torch.Size([256, 5760]).

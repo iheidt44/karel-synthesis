@@ -56,6 +56,16 @@ class BaseVAE(nn.Module):
         self.state_shape = (len(STATE_TABLE), Config.env_height, Config.env_width)
         
         # Input: s_i (CxHxW). Output: enc(s_i) (Z).
+        # H_out = Config.env_height - 4
+        # W_out = Config.env_width - 4
+
+        # self.state_encoder = nn.Sequential(
+        #     self.init_(nn.Conv2d(self.state_shape[0], 32, 3, stride=1)), nn.ReLU(),
+        #     self.init_(nn.Conv2d(32, 32, 3, stride=1)), nn.ReLU(),
+        #     nn.Flatten(),
+        #     self.init_(nn.Linear(32 * H_out * W_out, self.hidden_size)), nn.ReLU()
+        # )
+
         self.state_encoder = nn.Sequential(
             self.init_(nn.Conv2d(self.state_shape[0], 32, 3, stride=1)), nn.ReLU(),
             self.init_(nn.Conv2d(32, 32, 3, stride=1)), nn.ReLU(), nn.Flatten(),

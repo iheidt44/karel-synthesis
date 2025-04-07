@@ -112,8 +112,7 @@ class Trainer:
         
         latent_loss = self.model.get_latent_loss()
         
-        # total_loss = self.prog_loss_coef * progs_loss + self.a_h_loss_coef * a_h_loss \
-        #     + self.latent_loss_coef * latent_loss
+
         total_loss = self.a_h_loss_coef * a_h_loss + self.latent_loss_coef * latent_loss
 
         if training:
@@ -133,16 +132,6 @@ class Trainer:
                 a_h_t_accuracy = (pred_a_h[a_h_masks_combined] == a_h[a_h_masks_combined]).float().mean()
                 a_h_s_accuracy = (a_h == pred_a_h).min(dim=1).values.float().mean()
             
-        # return [
-        #     total_loss.detach().cpu().numpy().item(),
-        #     progs_loss.detach().cpu().numpy().item(),
-        #     a_h_loss.detach().cpu().numpy().item(),
-        #     latent_loss.detach().cpu().numpy().item(),
-        #     progs_t_accuracy.detach().cpu().numpy().item(),
-        #     progs_s_accuracy.detach().cpu().numpy().item(),
-        #     a_h_t_accuracy.detach().cpu().numpy().item(),
-        #     a_h_s_accuracy.detach().cpu().numpy().item()
-        # ]
         return [
             total_loss.detach().cpu().numpy().item(),
             progs_loss.detach().cpu().numpy().item(), # 0.0
@@ -154,10 +143,9 @@ class Trainer:
             a_h_s_accuracy.detach().cpu().numpy().item()
         ]
     
-
-
     def _run_epoch(self, dataloader: DataLoader, epoch: int, training = True) -> EpochReturn:
         batch_info_list = np.zeros((len(dataloader), 8))
+        print('LEN', len(dataloader))
         
         for batch_idx, batch in enumerate(dataloader):
             StdoutLogger.log('Epoch', f'Running batch {batch_idx}.')

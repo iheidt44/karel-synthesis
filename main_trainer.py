@@ -21,6 +21,9 @@ if __name__ == '__main__':
 
     trainer = Trainer(model)
 
+    # checkpoint = torch.load("output/semantic_only_64/model/epoch_29.ptp", map_location=device)
+    # model.load_state_dict(checkpoint.get("model_state_dict", checkpoint), strict=False)
+
     StdoutLogger.log('Main', f'Starting trainer for model {Config.model_name}')
 
     trainer.train(p_train_dataloader, p_val_dataloader)
