@@ -101,7 +101,7 @@ class LatentSearch:
         # use_latent_only = True
         population_size = population.shape[0]
         rewards = torch.zeros(population_size, device=self.device)
-        eval_curve = []  # Tracks (best_reward, num_evaluations) after each individual
+        eval_curve = []
         current_best = -float('inf')
 
         if not use_latent_only:
@@ -115,11 +115,8 @@ class LatentSearch:
             else:
                 results = [execute_program(p, self.task_envs, self.dsl) for p in programs_str]
             
-            # rewards = []
-            # rewards = torch.zeros(population_size, device=self.device)
             for idx, (p, num_eval, r) in enumerate(results):
                 program_str = self.dsl.parse_node_to_str(p)
-                # rewards.append(r)
                 rewards[idx] = r
                 self.num_evaluations += num_eval
                 current_best = max(current_best, r)
@@ -143,8 +140,6 @@ class LatentSearch:
             StdoutLogger.log("Latent Search", f"BEFORE Number of evaluations: {self.num_evaluations}")
             sequence_length = Config.data_max_demo_length
             all_actions = []
-
-            # env_rewards = torch.zeros(population_size, len(self.task_envs), device=self.device)  # Store rewards per env
             
             self.reset_task_envs()
 
@@ -152,15 +147,12 @@ class LatentSearch:
 
             for env_idx in range(num_envs):
                 env = self.task_envs[env_idx]
-
-                # Convert environment state to tensor format expected by policy_executor
                 state_tensor = torch.tensor(env.get_state().get_state(), dtype=torch.float32, device=self.model.device)
-                state_tensor = state_tensor.permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
-                # Repeat for population_size and add demos_per_program dimension
-                s_h = state_tensor.repeat(population_size, 1, 1, 1, 1)  # [population_size, 1, C, H, W]
-                s_h = s_h.unsqueeze(2).repeat(1, 1, sequence_length, 1, 1, 1)  # [population_size, 1, max_demo_length, C, H, W]
+                state_tensor = state_tensor.permute(2, 0, 1).unsqueeze(0) 
+                s_h = state_tensor.repeat(population_size, 1, 1, 1, 1)  
+                s_h = s_h.unsqueeze(2).repeat(1, 1, sequence_length, 1, 1, 1) 
 
-                # Dummy action history (NOP-filled) and mask
+                # Dummy action history 
                 a_h = torch.full(
                     (population_size, 1, sequence_length),
                     fill_value=0,
@@ -171,21 +163,18 @@ class LatentSearch:
 
                 with torch.no_grad():
                     pred_actions, _, _ = self.model.policy_executor(
-                        population,  # [population_size, hidden_size]
+                        population, 
                         s_h=s_h,
                         a_h=a_h,
                         a_h_mask=a_h_masks,
                         a_h_teacher_enforcing=False
                     )
 
-                # Evaluate action sequences in the environment
-                actions = pred_actions.cpu().numpy()  # [population_size, max_demo_length]
+                actions = pred_actions.cpu().numpy() 
                 
                 all_actions.append(actions.copy())
                 
-
-            # rewards = torch.zeros(population_size, device=self.device)
-            env_rewards = torch.zeros(population_size, len(self.task_envs), device=self.device)  # Store rewards per env
+            env_rewards = torch.zeros(population_size, len(self.task_envs), device=self.device)
             self.reset_task_envs()
             original_envs = [copy.deepcopy(env) for env in self.task_envs]
 
@@ -200,7 +189,8 @@ class LatentSearch:
 
                     for action in all_actions[env_idx][i]:
 
-                        if action >= self.model.num_agent_actions - 1:  # NOP or invalid
+                        if action >= self.model.num_agent_actions - 1:
+                            # penlize NOP actions to try and avoid them
                             total_reward -= 0.001*np.count_nonzero(all_actions[env_idx][i] == 5)
                             break
 
@@ -223,13 +213,12 @@ class LatentSearch:
 
                 if mean_reward > self.best_reward:
                     self.best_reward = mean_reward
-                    self.best_program = population[i].cpu().tolist()  # Store z as list for logging
+                    self.best_program = population[i].cpu().tolist()
                     
                     self.best_actions = [actions[i].tolist() for actions in all_actions]
                     self.best_env_rewards = env_rewards[i].tolist()
 
                     StdoutLogger.log("Latent Search", f"New best reward: {self.best_reward}")
-                    #StdoutLogger.log("Latent Search", f"New best latent: {self.best_program}")
                     StdoutLogger.log("Latent Search", f"Number of evaluations: {self.num_evaluations}")
                     for env_idx, (env_actions, env_reward) in enumerate(zip(self.best_actions, self.best_env_rewards)):
                         StdoutLogger.log(
@@ -281,7 +270,6 @@ class LatentSearch:
             reward_curve.extend(eval_curve)
 
             current_best = rewards.max().item()
-            # reward_curve.append((current_best, self.num_evaluations))
             StdoutLogger.log('Latent Search', f'Iteration {iteration}: Best reward = {current_best}, Evaluations = {self.num_evaluations}')
             
             if self.converged:
@@ -316,9 +304,6 @@ class LatentSearch:
                     )
                 population = torch.stack(new_population)
             prev_mean_elite_reward = mean_elite_reward.cpu().numpy()
-        
-        # best_program_nodes = self.dsl.parse_str_to_node(self.best_program)
-        # self.task_envs[0].trace_program(best_program_nodes, self.trace_file, 1000)
         
         if not self.converged:
             with open(self.output_file, mode='a') as f:

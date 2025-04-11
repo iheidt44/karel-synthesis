@@ -134,7 +134,7 @@ class Trainer:
             
         return [
             total_loss.detach().cpu().numpy().item(),
-            progs_loss.detach().cpu().numpy().item(), # 0.0
+            progs_loss.detach().cpu().numpy().item(),
             a_h_loss.detach().cpu().numpy().item(),
             latent_loss.detach().cpu().numpy().item(),
             0.0,
