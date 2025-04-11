@@ -7,10 +7,6 @@ from tasks import get_task_cls
 from karel.world_generator import WorldGenerator
 
 def prepare_s_h(world):
-    """
-    Converts a world into an s_h tensor of shape:
-      (population_size, demos_per_program, max_demo_length, channels, height, width)
-    """
     state_tensor = torch.tensor(world.get_state(), dtype=torch.float32, device=device)
     state_tensor = state_tensor.permute(2, 0, 1).unsqueeze(0) 
     s_h = state_tensor.repeat(population_size, 1, 1, 1, 1) 
